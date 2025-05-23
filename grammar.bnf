@@ -1,47 +1,57 @@
 # Document structure
 
 <document> ::= <MYHTML_tag>
-<MYHTML_tag> ::= "<MYHTML>" <head_tag> <body_tag> "</MYHTML>"
+<MYHTML_tag> ::= "<MYHTML>" <ws>? <head_tag> <ws>? <body_tag> <ws>? "</MYHTML>"
 
 # head-body section
-<head_tag> ::= "<head>" <head_content> "</head>"
+<head_tag> ::= "<head>" <ws>? <head_content> <ws>? "</head>"
               | ""  # Making head optional
 
-<body_tag> ::= "<body>" <body_content> "</body>"
+<body_tag> ::= "<body>" <ws>? <body_content> <ws>? "</body>"
 
 <head_content> ::= <title_tag>
-                | <title_tag> <meta_tags>
+                | <title_tag> <ws>? <meta_tags>
 
 <meta_tags> ::= <meta_tag>
-              | <meta_tag> <meta_tags>
+              | <meta_tag> <ws>? <meta_tags>
 
 <title_tag> ::= "<title>" <text> "</title>"
 <meta_tag> ::= "<meta" <meta_attributes> ">"
 
 <meta_attributes> ::= "charset=\"UTF-8\""
-                   | "name=\"" <alphanumeric> "\" content=\"" <alphanumeric> "\""
+                   | "name=\"" <alphanumeric> "\"" " content=\"" <alphanumeric> "\""
 
 <body_content> ::= ""                                   
-                | <body_content> <body_element>          
+                | <body_content> <ws>? <body_element>          
 
 <body_element> ::= <p_element>
                 | <a_element>
                 | <img_element>
                 | <form_element>
                 | <div_element>
+                | <comment>
 
 <id_element> ::= "id=\"" <alphanumeric> "\""
+
+# Comments
+<comment> ::= <single_line_comment> | <multi_line_comment>
+<single_line_comment> ::= "<!--" <comment_text> "-->"
+<multi_line_comment> ::= "<!--" <multi_line_text> "-->"
+<multi_line_text> ::= <comment_text>
+                   | <comment_text> "\\n" <multi_line_text>
+<comment_text> ::= <text_char>*
+<text_char> ::= <letter> | <digit> | <special_char> | " " | <newline>
 
 # Body Elements
 <p_element> ::= "<p" <id_element> ">" <text> "</p>"
               | "<p" <id_element> <style_attr> ">" <text> "</p>"
               | "<p" <style_attr> <id_element> ">" <text> "</p>"
 
-<style_attr> ::= " style=\"" <alphanumeric> "\""
+<style_attr> ::= " style=\"" <text> "\""
 
 <a_element> ::= "<a" <id_element> <href> ">" <a_element_content> "</a>"
 
-<href> ::= " href=\"" <alphanumeric> "\""
+<href> ::= " href=\"" <url_text> "\""
 
 <a_element_content> ::= ""
                      | <text>
@@ -49,7 +59,15 @@
                      | <text> <img_element>
                      | <img_element> <text>
 
-<text> ::= <alphanumeric>
+# Text definitions
+<text> ::= <text_char>+
+<url_text> ::= (<letter> | <digit> | "/" | ":" | "." | "-" | "_" | "~" | "%" | "#")+
+
+<special_char> ::= "!" | "@" | "#" | "$" | "%" | "^" | "&" | "*" | "(" | ")" | "-" | "_" | "+" | "=" | "[" | "]" | "{" | "}" | ";" | ":" | "," | "." | "<" | ">" | "/" | "?" | "|" | "\\" | "'"
+
+# Whitespace and newlines
+<ws> ::= (" " | "\\t" | "\\n" | "\\r")+
+<newline> ::= "\\n" | "\\r" | "\\r\\n"
 
 <img_element> ::= "<img" <img_attributes> ">"
 
