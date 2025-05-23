@@ -1,0 +1,131 @@
+# Document structure
+
+<document> ::= <MYHTML_tag>
+<MYHTML_tag> ::= "<MYHTML>" <head_tag> <body_tag> "</MYHTML>"
+
+# head-body section
+<head_tag> ::= "<head>" <head_content> "</head>"
+              | ""  # Making head optional
+
+<body_tag> ::= "<body>" <body_content> "</body>"
+
+<head_content> ::= <title_tag>
+                | <title_tag> <meta_tags>
+
+<meta_tags> ::= <meta_tag>
+              | <meta_tag> <meta_tags>
+
+<title_tag> ::= "<title>" <text> "</title>"
+<meta_tag> ::= "<meta" <meta_attributes> ">"
+
+<meta_attributes> ::= "charset=\"UTF-8\""
+                   | "name=\"" <alphanumeric> "\" content=\"" <alphanumeric> "\""
+
+<body_content> ::= ""                                   
+                | <body_content> <body_element>          
+
+<body_element> ::= <p_element>
+                | <a_element>
+                | <img_element>
+                | <form_element>
+                | <div_element>
+
+<id_element> ::= "id=\"" <alphanumeric> "\""
+
+# Body Elements
+<p_element> ::= "<p" <id_element> ">" <text> "</p>"
+              | "<p" <id_element> <style_attr> ">" <text> "</p>"
+              | "<p" <style_attr> <id_element> ">" <text> "</p>"
+
+<style_attr> ::= " style=\"" <alphanumeric> "\""
+
+<a_element> ::= "<a" <id_element> <href> ">" <a_element_content> "</a>"
+
+<href> ::= " href=\"" <alphanumeric> "\""
+
+<a_element_content> ::= ""
+                     | <text>
+                     | <img_element>
+                     | <text> <img_element>
+                     | <img_element> <text>
+
+<text> ::= <alphanumeric>
+
+<img_element> ::= "<img" <img_attributes> ">"
+
+<img_attributes> ::= <required_img_attributes> <optional_img_attributes>
+                   | <required_img_attributes>
+
+<required_img_attributes> ::= <src> <alt> <id_element>
+                          | <src> <id_element> <alt>
+                          | <alt> <src> <id_element>
+                          | <alt> <id_element> <src>
+                          | <id_element> <alt> <src>
+                          | <id_element> <src> <alt>
+
+<optional_img_attributes> ::= <width> <height>
+                          | <height> <width>
+
+<src> ::= " src=\"" <alphanumeric> "\""
+<alt> ::= " alt=\"" <alphanumeric> "\""
+<width> ::= " width=\"" <positive_integer> "\""
+<height> ::= " height=\"" <positive_integer> "\""
+
+<form_element> ::= "<form" <form_attributes> ">" <form_content> "</form>"
+
+<form_attributes> ::= <id_element>
+                   | <id_element> <style_attr>
+                   | <style_attr> <id_element>
+
+<form_content> ::= <input_element>
+                | <label_element>
+                | <input_element> <form_content>
+                | <label_element> <form_content>
+
+<input_element> ::= "<input" <input_attributes> ">"
+
+<input_attributes> ::= <id_element> <type> <optional_input_attrs>
+                    | <type> <id_element> <optional_input_attrs>
+                    | <type> <optional_input_attrs> <id_element>
+
+<type> ::= " type=\"" <alphanumeric> "\""
+
+<optional_input_attrs> ::= ""
+                        | <value>
+                        | <style_attr>
+                        | <value> <style_attr>
+                        | <style_attr> <value>
+
+<value> ::= " value=\"" <alphanumeric> "\""
+
+<label_element> ::= "<label" <label_attributes> ">" <text> "</label>"
+                 | "<label" <label_attributes> ">" "</label>"
+
+<label_attributes> ::= <id_element> <for>
+                    | <for> <id_element>
+                    | <id_element> <for> <style_attr>
+                    | <id_element> <style_attr> <for>
+                    | <for> <id_element> <style_attr>
+                    | <for> <style_attr> <id_element>
+                    | <style_attr> <for> <id_element>
+                    | <style_attr> <id_element> <for>
+
+<for> ::= " for=\"" <alphanumeric> "\""
+
+<div_element> ::= "<div" <div_attributes> ">" <div_content> "</div>"
+
+<div_attributes> ::= <id_element>
+                  | <id_element> <style_attr>
+                  | <style_attr> <id_element>
+
+<div_content> ::= ""
+                | <body_element>
+                | <div_content> <body_element>
+
+<alphanumeric> ::= <letter> | <digit> | <letter> <alphanumeric> | <digit> <alphanumeric>
+<letter> ::= "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l" | "m" | "n" | "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v" | "w" | "x" | "y" | "z" | "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" | "J" | "K" | "L" | "M" | "N" | "O" | "P" | "Q" | "R" | "S" | "T" | "U" | "V" | "W" | "X" | "Y" | "Z"
+
+<positive_integer> ::= <digit>
+                    | <digit> <positive_integer>
+
+<digit> ::= "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9"
