@@ -1,0 +1,12 @@
+<MYHTML>
+<head>
+<title>Test Duplicate IDs</title>
+</head>
+<body>
+<div id="main">
+    <p id="para1">First paragraph</p>
+    <p id="para1">Second paragraph with duplicate ID</p>
+    <img src="test.jpg" alt="test" id="main">
+</div>
+</body>
+</MYHTML> 

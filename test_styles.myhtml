@@ -1,0 +1,26 @@
+<MYHTML>
+<head>
+<title>Test Style Validation</title>
+</head>
+<body>
+    <!-- Valid styles -->
+    <div id="div1" style="background_color:white; color:black; font_size:90px">
+        <p id="p1" style="font_family:Arial; font_size:160%">Valid styles</p>
+    </div>
+
+    <!-- Invalid property name -->
+    <div id="div2" style="invalid_prop:value">Invalid property</div>
+
+    <!-- Invalid font size format -->
+    <p id="p2" style="font_size:90">Missing unit</p>
+    <p id="p3" style="font_size:90em">Wrong unit</p>
+    <p id="p4" style="font_size:abc%">Invalid number</p>
+
+    <!-- Duplicate properties -->
+    <div id="div3" style="color:red; font_size:100px; color:blue">Duplicate color</div>
+
+    <!-- Invalid format -->
+    <p id="p5" style="color=red">Using = instead of :</p>
+    <p id="p6" style="color:red font_size:12px">Missing semicolon</p>
+</body>
+</MYHTML> 

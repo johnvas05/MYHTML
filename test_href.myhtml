@@ -1,0 +1,30 @@
+<MYHTML>
+<head>
+<title>Test HREF Validation</title>
+</head>
+<body>
+    <!-- Test element ID reference to existing ID -->
+    <div id="section1">
+        <p id="para1">First paragraph</p>
+    </div>
+    <a id="link1" href="#section1">Link to section 1</a>
+
+    <!-- Test element ID reference to non-existent ID -->
+    <a id="link2" href="#nonexistent">Link to nowhere</a>
+
+    <!-- Test absolute URLs -->
+    <a id="link3" href="https://www.example.com">Example site</a>
+    <a id="link4" href="http://test.com">Test site</a>
+    <a id="link5" href="mailto:test@example.com">Email</a>
+    <a id="link6" href="ftp://files.example.com">FTP site</a>
+
+    <!-- Test relative URLs -->
+    <a id="link7" href="images/photo.jpg">Photo</a>
+    <a id="link8" href="../documents/doc.pdf">Document</a>
+    <a id="link9" href="./page.html">Page</a>
+
+    <!-- Test invalid URLs -->
+    <a id="link10" href="invalid<url">Invalid URL</a>
+    <a id="link11" href="space in url">Invalid URL with spaces</a>
+</body>
+</MYHTML> 

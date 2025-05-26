@@ -1,0 +1,23 @@
+<MYHTML>
+<head>
+<title>Test Label-Input Association</title>
+</head>
+<body>
+    <form>
+        <!-- Valid label-input association -->
+        <label id="nameLabel" for="name">Name:</label>
+        <input type="text" id="name">
+
+        <!-- Label referencing non-existent input -->
+        <label id="emailLabel" for="email">Email:</label>
+
+        <!-- Multiple labels pointing to same input -->
+        <label id="usernameLabel1" for="username">Username:</label>
+        <label id="usernameLabel2" for="username">Username (again):</label>
+        <input type="text" id="username">
+
+        <!-- Input without label -->
+        <input type="text" id="noLabel">
+    </form>
+</body>
+</MYHTML> 

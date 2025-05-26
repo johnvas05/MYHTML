@@ -9,6 +9,7 @@
 
 extern int yylex();
 void yyerror(const char *s);
+extern int debug;
 %}
 
 %option noyywrap
@@ -67,7 +68,8 @@ SPECIAL_CHAR [!@#$%^&*()\-_+=\[\]{}:;,.<>/?|\\']
 "charset=\"UTF-8\""    { return CHARSET_ATTR; }
 " width=\""{DIGIT}+"\""  { yylval.string_val = strdup(yytext); return WIDTH_ATTR; }
 " height=\""{DIGIT}+"\""  { yylval.string_val = strdup(yytext); return HEIGHT_ATTR; }
-"name=\""[^\"]+"\""[ ]+"content=\""[^\"]+"\""  { yylval.string_val = strdup(yytext); return NAME_CONTENT_ATTR; }
+"name=\""[^\"]+"\""[ ]+"content=\""[^\"]+"\""  { return NAME_CONTENT_ATTR; }
+" checkbox_count=\""[^\"]+"\""  { yylval.string_val = strdup(yytext); return CHECKBOX_COUNT_ATTR; }
 
 [^<>" \t\n\r=][^<>]*  { yylval.string_val = strdup(yytext); return TEXT; }
 

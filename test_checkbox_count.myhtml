@@ -1,0 +1,35 @@
+<MYHTML>
+<head>
+    <title>Test Checkbox Count</title>
+</head>
+<body>
+    <!-- Test case 1: Correct number of checkboxes -->
+    <form checkbox_count="3">
+        <input type="checkbox" id="cb1">
+        <input type="checkbox" id="cb2">
+        <input type="checkbox" id="cb3">
+    </form>
+
+    <!-- Test case 2: Too few checkboxes -->
+    <form checkbox_count="2">
+        <input type="checkbox" id="cb4">
+    </form>
+
+    <!-- Test case 3: Too many checkboxes -->
+    <form checkbox_count="1">
+        <input type="checkbox" id="cb5">
+        <input type="checkbox" id="cb6">
+    </form>
+
+    <!-- Test case 4: Invalid checkbox_count value -->
+    <form checkbox_count="-1">
+        <input type="checkbox" id="cb7">
+    </form>
+
+    <!-- Test case 5: Form without checkbox_count attribute -->
+    <form>
+        <input type="checkbox" id="cb8">
+        <input type="checkbox" id="cb9">
+    </form>
+</body>
+</MYHTML> 

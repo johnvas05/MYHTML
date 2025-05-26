@@ -88,9 +88,10 @@ extern int yydebug;
     FOR_ATTR = 289,                /* FOR_ATTR  */
     WIDTH_ATTR = 290,              /* WIDTH_ATTR  */
     HEIGHT_ATTR = 291,             /* HEIGHT_ATTR  */
-    CHARSET_ATTR = 292,            /* CHARSET_ATTR  */
-    NAME_CONTENT_ATTR = 293,       /* NAME_CONTENT_ATTR  */
-    TEXT = 294                     /* TEXT  */
+    CHECKBOX_COUNT_ATTR = 292,     /* CHECKBOX_COUNT_ATTR  */
+    CHARSET_ATTR = 293,            /* CHARSET_ATTR  */
+    NAME_CONTENT_ATTR = 294,       /* NAME_CONTENT_ATTR  */
+    TEXT = 295                     /* TEXT  */
   };
   typedef enum yytokentype yytoken_kind_t;
 #endif
@@ -99,11 +100,15 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 54 "myhtml.y"
+#line 543 "myhtml.y"
 
     char* string_val;
+    struct {
+        char* attributes[10];
+        int attr_count;
+    } attr_list;
 
-#line 107 "myhtml.tab.h"
+#line 112 "myhtml.tab.h"
 
 };
 typedef union YYSTYPE YYSTYPE;
