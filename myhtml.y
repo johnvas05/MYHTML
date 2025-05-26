@@ -5,6 +5,7 @@
 
 #define MAX_IDS 100
 #define MAX_LABELS 100
+#define MAX_TITLE_LENGTH 60
 
 extern int yylex(void);
 extern int yylineno;
@@ -20,6 +21,15 @@ int hasError = 0;
 
 /* Debug flag */
 int debug = 1;
+
+/* Validation function for title length */
+void validate_title_length(const char* title) {
+    if (strlen(title) > MAX_TITLE_LENGTH) {
+        hasError = 1;
+        fprintf(stderr, "Error at line %d: Title length exceeds maximum of %d characters (current length: %lu)\n", 
+                yylineno, MAX_TITLE_LENGTH, strlen(title));
+    }
+}
 
 /* Function to display file contents */
 void display_file(const char* filename) {
@@ -102,7 +112,11 @@ meta_tags: meta_tag
         ;
 
 title_tag: TITLE_START text TITLE_END
-        { if (debug) printf("Parsed title: %s\n", $2); free($2); }
+        { 
+            validate_title_length($2);
+            if (debug) printf("Parsed title: %s\n", $2); 
+            free($2); 
+        }
         ;
 
 meta_tag: META_START meta_attributes CLOSE_TAG

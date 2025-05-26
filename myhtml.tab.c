@@ -75,6 +75,7 @@
 
 #define MAX_IDS 100
 #define MAX_LABELS 100
+#define MAX_TITLE_LENGTH 60
 
 extern int yylex(void);
 extern int yylineno;
@@ -90,6 +91,15 @@ int hasError = 0;
 
 /* Debug flag */
 int debug = 1;
+
+/* Validation function for title length */
+void validate_title_length(const char* title) {
+    if (strlen(title) > MAX_TITLE_LENGTH) {
+        hasError = 1;
+        fprintf(stderr, "Error at line %d: Title length exceeds maximum of %d characters (current length: %lu)\n", 
+                yylineno, MAX_TITLE_LENGTH, strlen(title));
+    }
+}
 
 /* Function to display file contents */
 void display_file(const char* filename) {
@@ -110,7 +120,7 @@ void display_file(const char* filename) {
     fclose(fp);
 }
 
-#line 114 "myhtml.tab.c"
+#line 124 "myhtml.tab.c"
 
 # ifndef YY_CAST
 #  ifdef __cplusplus
@@ -596,13 +606,13 @@ static const yytype_int8 yytranslate[] =
 /* YYRLINE[YYN] -- Source line where rule number YYN was defined.  */
 static const yytype_uint8 yyrline[] =
 {
-       0,    78,    78,    82,    85,    88,    92,    94,    98,   100,
-     104,   108,   112,   113,   116,   117,   120,   121,   122,   123,
-     124,   125,   126,   129,   132,   133,   143,   146,   149,   154,
-     157,   158,   159,   160,   161,   164,   167,   168,   169,   170,
-     171,   172,   175,   178,   179,   182,   183,   186,   189,   190,
-     191,   192,   195,   198,   201,   202,   205,   208,   209,   210,
-     213,   214,   217,   221
+       0,    88,    88,    92,    95,    98,   102,   104,   108,   110,
+     114,   122,   126,   127,   130,   131,   134,   135,   136,   137,
+     138,   139,   140,   143,   146,   147,   157,   160,   163,   168,
+     171,   172,   173,   174,   175,   178,   181,   182,   183,   184,
+     185,   186,   189,   192,   193,   196,   197,   200,   203,   204,
+     205,   206,   209,   212,   215,   216,   219,   222,   223,   224,
+     227,   228,   231,   235
 };
 #endif
 
@@ -1243,79 +1253,83 @@ yyreduce:
   switch (yyn)
     {
   case 2: /* document: MYHTML_START head_tag body_tag MYHTML_END  */
-#line 79 "myhtml.y"
+#line 89 "myhtml.y"
         { if (debug) printf("Successfully parsed MYHTML document\n"); }
-#line 1249 "myhtml.tab.c"
+#line 1259 "myhtml.tab.c"
     break;
 
   case 3: /* head_tag: HEAD_START head_content HEAD_END  */
-#line 83 "myhtml.y"
+#line 93 "myhtml.y"
         { if (debug) printf("Parsed head section\n"); }
-#line 1255 "myhtml.tab.c"
+#line 1265 "myhtml.tab.c"
     break;
 
   case 4: /* head_tag: %empty  */
-#line 85 "myhtml.y"
+#line 95 "myhtml.y"
         { if (debug) printf("Empty head section\n"); }
-#line 1261 "myhtml.tab.c"
+#line 1271 "myhtml.tab.c"
     break;
 
   case 5: /* body_tag: BODY_START body_content BODY_END  */
-#line 89 "myhtml.y"
+#line 99 "myhtml.y"
         { if (debug) printf("Parsed body section\n"); }
-#line 1267 "myhtml.tab.c"
+#line 1277 "myhtml.tab.c"
     break;
 
   case 6: /* head_content: title_tag meta_tags  */
-#line 93 "myhtml.y"
+#line 103 "myhtml.y"
             { if (debug) printf("Parsed head content with meta tags\n"); }
-#line 1273 "myhtml.tab.c"
+#line 1283 "myhtml.tab.c"
     break;
 
   case 7: /* head_content: title_tag  */
-#line 95 "myhtml.y"
+#line 105 "myhtml.y"
             { if (debug) printf("Parsed head content with title only\n"); }
-#line 1279 "myhtml.tab.c"
+#line 1289 "myhtml.tab.c"
     break;
 
   case 8: /* meta_tags: meta_tag  */
-#line 99 "myhtml.y"
+#line 109 "myhtml.y"
         { if (debug) printf("Parsed single meta tag\n"); }
-#line 1285 "myhtml.tab.c"
+#line 1295 "myhtml.tab.c"
     break;
 
   case 9: /* meta_tags: meta_tags meta_tag  */
-#line 101 "myhtml.y"
+#line 111 "myhtml.y"
         { if (debug) printf("Parsed additional meta tag\n"); }
-#line 1291 "myhtml.tab.c"
+#line 1301 "myhtml.tab.c"
     break;
 
   case 10: /* title_tag: TITLE_START text TITLE_END  */
-#line 105 "myhtml.y"
-        { if (debug) printf("Parsed title: %s\n", (yyvsp[-1].string_val)); free((yyvsp[-1].string_val)); }
-#line 1297 "myhtml.tab.c"
+#line 115 "myhtml.y"
+        { 
+            validate_title_length((yyvsp[-1].string_val));
+            if (debug) printf("Parsed title: %s\n", (yyvsp[-1].string_val)); 
+            free((yyvsp[-1].string_val)); 
+        }
+#line 1311 "myhtml.tab.c"
     break;
 
   case 11: /* meta_tag: META_START meta_attributes CLOSE_TAG  */
-#line 109 "myhtml.y"
+#line 123 "myhtml.y"
        { if (debug) printf("Parsed meta tag\n"); }
-#line 1303 "myhtml.tab.c"
+#line 1317 "myhtml.tab.c"
     break;
 
   case 22: /* body_element: TEXT  */
-#line 126 "myhtml.y"
+#line 140 "myhtml.y"
                   { free((yyvsp[0].string_val)); }
-#line 1309 "myhtml.tab.c"
+#line 1323 "myhtml.tab.c"
     break;
 
   case 24: /* comment_text: %empty  */
-#line 132 "myhtml.y"
+#line 146 "myhtml.y"
                           { (yyval.string_val) = strdup(""); }
-#line 1315 "myhtml.tab.c"
+#line 1329 "myhtml.tab.c"
     break;
 
   case 25: /* comment_text: comment_text TEXT  */
-#line 133 "myhtml.y"
+#line 147 "myhtml.y"
                                { 
                char* new_text = malloc(strlen((yyvsp[-1].string_val)) + strlen((yyvsp[0].string_val)) + 1);
                strcpy(new_text, (yyvsp[-1].string_val));
@@ -1324,52 +1338,52 @@ yyreduce:
                free((yyvsp[0].string_val));
                (yyval.string_val) = new_text;
            }
-#line 1328 "myhtml.tab.c"
+#line 1342 "myhtml.tab.c"
     break;
 
   case 26: /* p_element: P_START ID_ATTR CLOSE_TAG text P_END  */
-#line 143 "myhtml.y"
+#line 157 "myhtml.y"
                                                 {
             free((yyvsp[-1].string_val));
          }
-#line 1336 "myhtml.tab.c"
+#line 1350 "myhtml.tab.c"
     break;
 
   case 27: /* p_element: P_START ID_ATTR STYLE_ATTR CLOSE_TAG text P_END  */
-#line 146 "myhtml.y"
+#line 160 "myhtml.y"
                                                            {
             free((yyvsp[-1].string_val));
          }
-#line 1344 "myhtml.tab.c"
+#line 1358 "myhtml.tab.c"
     break;
 
   case 28: /* p_element: P_START STYLE_ATTR ID_ATTR CLOSE_TAG text P_END  */
-#line 149 "myhtml.y"
+#line 163 "myhtml.y"
                                                            {
             free((yyvsp[-1].string_val));
          }
-#line 1352 "myhtml.tab.c"
+#line 1366 "myhtml.tab.c"
     break;
 
   case 52: /* label_element: LABEL_START label_attributes CLOSE_TAG text LABEL_END  */
-#line 195 "myhtml.y"
+#line 209 "myhtml.y"
                                                                      {
                 free((yyvsp[-1].string_val));
              }
-#line 1360 "myhtml.tab.c"
+#line 1374 "myhtml.tab.c"
     break;
 
   case 62: /* text: TEXT  */
-#line 217 "myhtml.y"
+#line 231 "myhtml.y"
            {
         (yyval.string_val) = strdup((yyvsp[0].string_val));
         free((yyvsp[0].string_val));
     }
-#line 1369 "myhtml.tab.c"
+#line 1383 "myhtml.tab.c"
     break;
 
   case 63: /* text: text TEXT  */
-#line 221 "myhtml.y"
+#line 235 "myhtml.y"
                 {
         char* new_text = malloc(strlen((yyvsp[-1].string_val)) + strlen((yyvsp[0].string_val)) + 1);
         strcpy(new_text, (yyvsp[-1].string_val));
@@ -1378,11 +1392,11 @@ yyreduce:
         free((yyvsp[0].string_val));
         (yyval.string_val) = new_text;
     }
-#line 1382 "myhtml.tab.c"
+#line 1396 "myhtml.tab.c"
     break;
 
 
-#line 1386 "myhtml.tab.c"
+#line 1400 "myhtml.tab.c"
 
       default: break;
     }
@@ -1575,7 +1589,7 @@ yyreturnlab:
   return yyresult;
 }
 
-#line 231 "myhtml.y"
+#line 245 "myhtml.y"
 
 
 void yyerror(const char *s) {
