@@ -100,15 +100,11 @@ extern int yydebug;
 #if ! defined YYSTYPE && ! defined YYSTYPE_IS_DECLARED
 union YYSTYPE
 {
-#line 543 "myhtml.y"
+#line 246 "myhtml.y"
 
     char* string_val;
-    struct {
-        char* attributes[10];
-        int attr_count;
-    } attr_list;
 
-#line 112 "myhtml.tab.h"
+#line 108 "myhtml.tab.h"
 
 };
 typedef union YYSTYPE YYSTYPE;

@@ -75,357 +75,193 @@
 #include <ctype.h>
 
 #define MAX_IDS 100
-#define MAX_LABELS 100
 #define MAX_TITLE_LENGTH 60
-#define MAX_ATTRIBUTES 10
-#define MAX_STYLES 10
 
 extern int yylex(void);
 extern int yylineno;
 extern char* yytext;
 void yyerror(const char *s);
 
-/* Struct for holding attributes */
-typedef struct {
-    char* attributes[MAX_ATTRIBUTES];
-    int attr_count;
-} AttributeList;
-
-/* Global variables for validation */
 char* usedIds[MAX_IDS];
 int usedIdsCount = 0;
-
-typedef struct {
-    char* label_id;
-    char* input_id;
-    int line_no;
-} LabelInputPair;
-
-LabelInputPair labelInputMap[MAX_LABELS];
-int labelInputMapCount = 0;
-
 int hasError = 0;
-int hasSubmitInput = 0;
-int submitInputLine = 0;
 
-/* Form validation */
-int expectedCheckboxCount = -1;  // -1 means no count specified
-int actualCheckboxCount = 0;
-int formStartLine = 0;
-int hasCheckboxInput = 0;  // Flag to track if form has any checkbox
+/* Global variables για τον έλεγχο του input type */
+int submitFound = 0;        /* Υπάρχει ήδη κάποιο input τύπου submit μέσα στη φόρμα */
+int lastInputWasSubmit = 0;   /* Το τελευταίο input που διαβάστηκε στο περιεχόμενο της φόρμας είναι submit; */
 
-/* Debug flag */
-int debug = 1;
+/* Global variables για τον έλεγχο των checkbox */
+int expectedCheckboxCount = 0;  /* Η αναμενόμενη τιμή από το checkbox_count */
+int actualCheckboxCount = 0;    /* Ο πραγματικός αριθμός των checkbox που βρέθηκαν */
+int hasCheckbox = 0;           /* Flag για το αν υπάρχει τουλάχιστον ένα checkbox */
 
-/* Style validation helpers */
-typedef struct {
-    char* property;
-    char* value;
-} StylePair;
+/* Global variables για τον έλεγχο label-input */
+char* inputIds[MAX_IDS];      /* Αποθήκευση των IDs των input elements */
+char* labelFors[MAX_IDS];     /* Αποθήκευση των for attributes των labels */
+int labelLines[MAX_IDS];      /* Αποθήκευση των γραμμών των labels για μηνύματα σφάλματος */
+int inputIdsCount = 0;
+int labelForsCount = 0;
 
-/* Extract style pairs from style attribute */
-void validate_style_attribute(const char* attr_str) {
-    // Skip the initial ' style="' part
-    const char* start = strchr(attr_str, '"');
-    if (!start) return;
-    start++; // Move past the quote
-    
-    // Find the closing quote
-    const char* end = strchr(start, '"');
-    if (!end) return;
-    
-    // Copy the style content for tokenization
-    int len = end - start;
-    char* style_content = malloc(len + 1);
-    strncpy(style_content, start, len);
-    style_content[len] = '\0';
-    
-    // Store style pairs for uniqueness check
-    StylePair styles[MAX_STYLES];
-    int style_count = 0;
-    
-    // Check for missing semicolons between properties
-    int property_count = 0;
-    char* s = style_content;
-    while (*s) {
-        if (*s == ':') property_count++;
-        s++;
-    }
-    
-    s = style_content;
-    int semicolon_count = 0;
-    while (*s) {
-        if (*s == ';') semicolon_count++;
-        s++;
-    }
-    
-    // If there are multiple properties, we need semicolons between them
-    if (property_count > 1 && semicolon_count < property_count - 1) {
-        printf("Error at line %d: Missing semicolon between properties\n", yylineno);
-        hasError = 1;
-        free(style_content);
-        return;
-    }
-    
-    // Split by semicolon
-    char* token = strtok(style_content, ";");
-    while (token != NULL) {
-        // Skip leading whitespace
-        while (*token == ' ') token++;
-        
-        // Find the colon separator
-        char* colon = strchr(token, ':');
-        if (!colon) {
-            printf("Error at line %d: Invalid style format, missing colon in '%s'\n", 
-                   yylineno, token);
-            hasError = 1;
-            token = strtok(NULL, ";");
-            continue;
-        }
-        
-        // Split into property and value
-        *colon = '\0';
-        char* property = token;
-        char* value = colon + 1;
-        
-        // Skip leading whitespace in value
-        while (*value == ' ') value++;
-        
-        // Remove trailing whitespace from property
-        char* end = property + strlen(property) - 1;
-        while (end > property && *end == ' ') {
-            *end = '\0';
-            end--;
-        }
-        
-        // Remove trailing whitespace from value
-        end = value + strlen(value) - 1;
-        while (end > value && *end == ' ') {
-            *end = '\0';
-            end--;
-        }
-        
-        // Check for duplicate properties
-        for (int i = 0; i < style_count; i++) {
-            if (strcmp(styles[i].property, property) == 0) {
-                printf("Error at line %d: Duplicate style property '%s'\n", 
-                       yylineno, property);
-                hasError = 1;
-                goto next_token;
-            }
-        }
-        
-        // Validate property name
-        if (strcmp(property, "background_color") != 0 &&
-            strcmp(property, "color") != 0 &&
-            strcmp(property, "font_family") != 0 &&
-            strcmp(property, "font_size") != 0) {
-            printf("Error at line %d: Invalid style property '%s'\n", 
-                   yylineno, property);
-            hasError = 1;
-            goto next_token;
-        }
-        
-        // Validate value based on property
-        if (strcmp(property, "font_size") == 0) {
-            // Should be number followed by px or %
-            char* unit = NULL;
-            if (strlen(value) > 2) {
-                unit = value + strlen(value) - 2;
-            }
-            
-            // Check if value ends with px or %
-            if (!unit || (strcmp(unit, "px") != 0 && strcmp(unit, "%") != 0)) {
-                printf("Error at line %d: Font size must end with 'px' or '%%'\n", 
-                       yylineno);
-                hasError = 1;
-                goto next_token;
-            }
-            
-            // Temporarily null-terminate before unit to check number
-            *unit = '\0';
-            char* endptr;
-            strtol(value, &endptr, 10);
-            if (*endptr != '\0') {
-                printf("Error at line %d: Invalid numeric value in font size\n", 
-                       yylineno);
-                hasError = 1;
-                goto next_token;
-            }
-            // Restore the unit
-            *unit = unit[0];
-        }
-        
-        // Store valid style pair
-        if (style_count < MAX_STYLES) {
-            styles[style_count].property = strdup(property);
-            styles[style_count].value = strdup(value);
-            style_count++;
-        }
-        
-    next_token:
-        token = strtok(NULL, ";");
-    }
-    
-    // Free style pairs and content
-    for (int i = 0; i < style_count; i++) {
-        free(styles[i].property);
-        free(styles[i].value);
-    }
-    free(style_content);
-}
-
-/* Extract ID value from attribute string */
-char* extract_id(const char* attr_str) {
-    // Skip the initial ' id="' part
+/* Γενική συνάρτηση εξαγωγής τιμής από attribute (αναζητά το πρώτο ζευγάρι εισαγωγικών) */
+char* extract_value(const char* attr_str) {
     const char* start = strchr(attr_str, '"');
     if (!start) return NULL;
-    start++; // Move past the quote
-    
-    // Find the closing quote
+    start++;  // Περνάμε το πρώτο "
     const char* end = strchr(start, '"');
     if (!end) return NULL;
-    
-    // Calculate length and allocate memory
-    int len = end - start;
-    char* id = malloc(len + 1);
-    strncpy(id, start, len);
-    id[len] = '\0';
-    
-    return id;
-}
-
-/* Extract attribute value from attribute string */
-char* extract_attr_value(const char* attr_str) {
-    // Skip to the first quote
-    const char* start = strchr(attr_str, '"');
-    if (!start) return NULL;
-    start++; // Move past the quote
-    
-    // Find the closing quote
-    const char* end = strchr(start, '"');
-    if (!end) return NULL;
-    
-    // Calculate length and allocate memory
     int len = end - start;
     char* value = malloc(len + 1);
     strncpy(value, start, len);
     value[len] = '\0';
-    
     return value;
 }
 
-/* Check if ID is already used */
+/* Έλεγχος για διπλότυπο ID */
 int is_id_used(const char* id) {
     for (int i = 0; i < usedIdsCount; i++) {
-        if (strcmp(usedIds[i], id) == 0) {
+        if (strcmp(usedIds[i], id) == 0)
             return 1;
-        }
     }
     return 0;
 }
 
-/* Check if a string starts with a prefix */
-int starts_with(const char* str, const char* prefix) {
-    return strncmp(str, prefix, strlen(prefix)) == 0;
-}
-
-/* Validate URL format */
-void validate_url(const char* attr_str, const char* attr_name) {
-    char* url = extract_attr_value(attr_str);
-    if (!url) return;
-    
-    // Check if it's an absolute URL
-    if (starts_with(url, "http://") || 
-        starts_with(url, "https://") || 
-        starts_with(url, "ftp://") ||
-        starts_with(url, "file://")) {
-        // Valid absolute URL, no additional validation needed
-    }
-    // Must be a relative URL
-    else {
-        // Check if it contains only valid URL characters
-        for (int i = 0; url[i]; i++) {
-            char c = url[i];
-            if (!((c >= 'a' && c <= 'z') || 
-                  (c >= 'A' && c <= 'Z') || 
-                  (c >= '0' && c <= '9') ||
-                  c == '/' || c == '.' || c == '-' || 
-                  c == '_' || c == '~' || c == '%')) {
-                hasError = 1;
-                fprintf(stderr, "Error at line %d: Invalid character in %s URL: '%c'\n", 
-                        yylineno, attr_name, c);
-                break;
-            }
-        }
-    }
-    
-    free(url);
-}
-
-/* Validate href value */
-void validate_href(const char* attr_str) {
-    char* href = extract_attr_value(attr_str);
-    if (!href) return;
-    
-    // If href starts with #, it's an element ID reference
-    if (href[0] == '#') {
-        // Skip the # character
-        char* referenced_id = href + 1;
-        if (!is_id_used(referenced_id)) {
-            hasError = 1;
-            fprintf(stderr, "Error at line %d: href references non-existent ID: '%s'\n", 
-                    yylineno, referenced_id);
-        }
-    }
-    // Otherwise validate as URL
-    else {
-        validate_url(attr_str, "href");
-    }
-    
-    free(href);
-}
-
-/* Validate src value */
-void validate_src(const char* attr_str) {
-    validate_url(attr_str, "src");
-}
-
-/* Validate ID uniqueness */
-void validate_id(const char* attr_str) {
-    char* id = extract_id(attr_str);
+/* Επικύρωση και αποθήκευση μοναδικού ID */
+void validate_id(const char* attr) {
+    char* id = extract_value(attr);
     if (!id) return;
-    
     if (is_id_used(id)) {
-        hasError = 1;
-        fprintf(stderr, "Error at line %d: Duplicate ID found: '%s'\n", yylineno, id);
+        fprintf(stderr, "Error at line %d: Duplicate ID '%s'.\n", yylineno, id);
+        exit(1);
     } else {
-        if (usedIdsCount < MAX_IDS) {
+        if (usedIdsCount < MAX_IDS)
             usedIds[usedIdsCount++] = strdup(id);
-        } else {
-            fprintf(stderr, "Warning: Maximum number of IDs reached\n");
-        }
+        else
+            fprintf(stderr, "Warning: Maximum number of IDs reached.\n");
     }
     free(id);
 }
 
-/* Validation function for title length */
+/* Βασική επικύρωση URL. Δέχεται απόλυτα URLs (http, https, ftp, file)
+   ή, για σχετικές τιμές, ελέγχει μόνο τους επιτρεπόμενους χαρακτήρες */
+void validate_url(const char* attr, const char* name) {
+    char* url = extract_value(attr);
+    if (url) {
+        if (!(strncmp(url, "http://", 7) == 0 ||
+              strncmp(url, "https://", 8) == 0 ||
+              strncmp(url, "ftp://", 6) == 0 ||
+              strncmp(url, "file://", 7) == 0)) {
+            for (int i = 0; url[i]; i++) {
+                if (!isalnum(url[i]) &&
+                    strchr("/.-_~%", url[i]) == NULL) {
+                    fprintf(stderr, "Error at line %d: Invalid character in %s URL: '%c'\n", 
+                            yylineno, name, url[i]);
+                    exit(1);
+                }
+            }
+        }
+    }
+    free(url);
+}
+
+/* Επικύρωση του href: αν ξεκινά με '#' πρέπει να δείχνει σε υπάρχον ID */
+void validate_href(const char* attr) {
+    char* href = extract_value(attr);
+    if (href) {
+        if (href[0] == '#') {
+            char* ref_id = href + 1;
+            if (!is_id_used(ref_id)) {
+                fprintf(stderr, "Error at line %d: href references non-existent ID '%s'\n", 
+                        yylineno, ref_id);
+                exit(1);
+            }
+        } else {
+            validate_url(attr, "href");
+        }
+    }
+    free(href);
+}
+
+/* Επικύρωση του src */
+void validate_src(const char* attr) {
+    validate_url(attr, "src");
+}
+
+/* Επικύρωση μήκους τίτλου */
 void validate_title_length(const char* title) {
     if (strlen(title) > MAX_TITLE_LENGTH) {
-        hasError = 1;
-        fprintf(stderr, "Error at line %d: Title length exceeds maximum of %d characters (current length: %lu)\n", 
+        fprintf(stderr, "Error at line %d: Title length exceeds %d characters (current length: %lu).\n",
                 yylineno, MAX_TITLE_LENGTH, strlen(title));
+        exit(1);
     }
 }
 
-/* Function to display file contents */
+/* Επικύρωση του checkbox_count attribute */
+void validate_checkbox_count(const char* attr) {
+    char* count_str = extract_value(attr);
+    if (!count_str) {
+        fprintf(stderr, "Error at line %d: Unable to extract checkbox_count value.\n", yylineno);
+        exit(1);
+    }
+
+    /* Έλεγχος αν είναι θετικός ακέραιος */
+    for (int i = 0; count_str[i]; i++) {
+        if (!isdigit(count_str[i])) {
+            fprintf(stderr, "Error at line %d: checkbox_count must be a positive integer.\n", yylineno);
+            free(count_str);
+            exit(1);
+        }
+    }
+
+    expectedCheckboxCount = atoi(count_str);
+    if (expectedCheckboxCount <= 0) {
+        fprintf(stderr, "Error at line %d: checkbox_count must be a positive integer.\n", yylineno);
+        free(count_str);
+        exit(1);
+    }
+
+    free(count_str);
+}
+
+/* Επικύρωση του input type.
+   Επιτρεπόμενες τιμές: "text", "checkbox", "radio", "submit". 
+   Επιστρέφει 1 αν είναι submit, διαφορετικά 0.
+   Επίσης, ελέγχει για μοναδικότητα του submit input. */
+int validate_input_type(const char* attr) {
+    char* typeValue = extract_value(attr);
+    if (!typeValue) {
+        fprintf(stderr, "Error at line %d: Unable to extract input type.\n", yylineno);
+        exit(1);
+    }
+    int isSubmit = 0;
+    if (strcmp(typeValue, "text") != 0 &&
+        strcmp(typeValue, "checkbox") != 0 &&
+        strcmp(typeValue, "radio") != 0 &&
+        strcmp(typeValue, "submit") != 0) {
+        fprintf(stderr, "Error at line %d: Invalid input type '%s'.\n", yylineno, typeValue);
+        exit(1);
+    }
+    if (strcmp(typeValue, "submit") == 0) {
+        if (submitFound) {
+            fprintf(stderr, "Error at line %d: Multiple submit inputs are not allowed.\n", yylineno);
+            exit(1);
+        }
+        submitFound = 1;
+        isSubmit = 1;
+    } else if (strcmp(typeValue, "checkbox") == 0) {
+        actualCheckboxCount++;
+        hasCheckbox = 1;
+    }
+    free(typeValue);
+    return isSubmit;
+}
+
+/* Συνάρτηση εμφάνισης του αρχείου (για επιβεβαίωση της εισόδου) */
 void display_file(const char* filename) {
     FILE* fp = fopen(filename, "r");
     if (fp == NULL) {
         fprintf(stderr, "Cannot open file: %s\n", filename);
         return;
     }
-
     printf("\n=== Contents of file %s ===\n", filename);
     char buffer[1024];
     int line_num = 1;
@@ -433,183 +269,50 @@ void display_file(const char* filename) {
         printf("%3d | %s", line_num++, buffer);
     }
     printf("=== End of file ===\n\n");
-
     fclose(fp);
 }
 
-/* Validate input type */
-int validate_input_type(const char* attr_str) {
-    // Skip the initial ' type="' part
-    const char* start = strchr(attr_str, '"');
-    if (!start) return 0;
-    start++; // Move past the quote
-    
-    // Find the closing quote
-    const char* end = strchr(start, '"');
-    if (!end) return 0;
-    
-    // Calculate length and allocate memory
-    int len = end - start;
-    char* type = malloc(len + 1);
-    strncpy(type, start, len);
-    type[len] = '\0';
-    
-    // Check if type is valid
-    int valid = (strcmp(type, "text") == 0 ||
-                strcmp(type, "checkbox") == 0 ||
-                strcmp(type, "radio") == 0 ||
-                strcmp(type, "submit") == 0);
-                
-    // Check submit type constraints
-    if (strcmp(type, "submit") == 0) {
-        if (hasSubmitInput) {
-            printf("Error at line %d: Multiple submit inputs found. First submit was at line %d\n", 
-                   yylineno, submitInputLine);
-            valid = 0;
-        } else {
-            hasSubmitInput = 1;
-            submitInputLine = yylineno;
-        }
+/* Προσθήκη ID input element */
+void add_input_id(const char* attr) {
+    char* id = extract_value(attr);
+    if (!id) return;
+    if (inputIdsCount < MAX_IDS) {
+        inputIds[inputIdsCount++] = strdup(id);
     }
-    
-    free(type);
-    return valid;
+    free(id);
 }
 
-/* Extract value from for attribute */
-char* extract_for_value(const char* attr_str) {
-    // Skip the initial ' for="' part
-    const char* start = strchr(attr_str, '"');
-    if (!start) return NULL;
-    start++; // Move past the quote
-    
-    // Find the closing quote
-    const char* end = strchr(start, '"');
-    if (!end) return NULL;
-    
-    // Calculate length and allocate memory
-    int len = end - start;
-    char* value = malloc(len + 1);
-    strncpy(value, start, len);
-    value[len] = '\0';
-    
-    return value;
-}
-
-/* Store label-input association for later validation */
-void store_label_for(const char* label_id, const char* for_attr, int line) {
-    char* for_value = extract_for_value(for_attr);
+/* Προσθήκη for attribute του label */
+void add_label_for(const char* attr) {
+    char* for_value = extract_value(attr);
     if (!for_value) return;
-    
-    if (labelInputMapCount < MAX_LABELS) {
-        labelInputMap[labelInputMapCount].label_id = strdup(label_id);
-        labelInputMap[labelInputMapCount].input_id = for_value;
-        labelInputMap[labelInputMapCount].line_no = line;
-        labelInputMapCount++;
+    if (labelForsCount < MAX_IDS) {
+        labelFors[labelForsCount] = strdup(for_value);
+        labelLines[labelForsCount] = yylineno;
+        labelForsCount++;
     }
+    free(for_value);
 }
 
-/* Check if an ID belongs to an input element */
-int is_input_id(const char* id) {
-    // Remove the leading space and quotes from id
-    const char* start = strchr(id, '"');
-    if (!start) return 0;
-    start++; // Move past the quote
-    
-    // Find the closing quote
-    const char* end = strchr(start, '"');
-    if (!end) return 0;
-    
-    // Extract the ID value
-    int len = end - start;
-    char* clean_id = malloc(len + 1);
-    strncpy(clean_id, start, len);
-    clean_id[len] = '\0';
-    
-    // Check if this ID belongs to an input element
-    for (int i = 0; i < usedIdsCount; i++) {
-        if (strcmp(usedIds[i], clean_id) == 0) {
-            free(clean_id);
-            return 1;
-        }
-    }
-    
-    free(clean_id);
-    return 0;
-}
-
-/* Validate all label-input associations */
-void validate_label_input_associations() {
-    // Track which input IDs are referenced
-    char* referenced_inputs[MAX_LABELS];
-    int referenced_count = 0;
-    
-    // Check each label-input pair
-    for (int i = 0; i < labelInputMapCount; i++) {
-        // Check if input exists
-        int input_exists = 0;
-        for (int j = 0; j < usedIdsCount; j++) {
-            if (strcmp(usedIds[j], labelInputMap[i].input_id) == 0) {
-                input_exists = 1;
+/* Έλεγχος όλων των label-input associations */
+void validate_all_labels() {
+    for (int i = 0; i < labelForsCount; i++) {
+        int found = 0;
+        for (int j = 0; j < inputIdsCount; j++) {
+            if (strcmp(labelFors[i], inputIds[j]) == 0) {
+                found = 1;
                 break;
             }
         }
-        
-        if (!input_exists) {
-            printf("Error at line %d: Label references non-existent input id '%s'\n",
-                   labelInputMap[i].line_no, labelInputMap[i].input_id);
-            hasError = 1;
-            continue;
+        if (!found) {
+            fprintf(stderr, "Error at line %d: Label references non-existent input ID '%s'\n",
+                    labelLines[i], labelFors[i]);
+            exit(1);
         }
-        
-        // Check for multiple labels pointing to same input
-        for (int j = 0; j < referenced_count; j++) {
-            if (strcmp(referenced_inputs[j], labelInputMap[i].input_id) == 0) {
-                printf("Error at line %d: Multiple labels pointing to input with id '%s'\n",
-                       labelInputMap[i].line_no, labelInputMap[i].input_id);
-                hasError = 1;
-                break;
-            }
-        }
-        
-        // Add to referenced inputs
-        if (referenced_count < MAX_LABELS) {
-            referenced_inputs[referenced_count++] = strdup(labelInputMap[i].input_id);
-        }
-    }
-    
-    // Free referenced inputs
-    for (int i = 0; i < referenced_count; i++) {
-        free(referenced_inputs[i]);
     }
 }
 
-/* Extract numeric value from checkbox_count attribute */
-int extract_checkbox_count(const char* attr_str) {
-    // Skip the initial ' checkbox_count="' part
-    const char* start = strchr(attr_str, '"');
-    if (!start) return -1;
-    start++; // Move past the quote
-    
-    // Find the closing quote
-    const char* end = strchr(start, '"');
-    if (!end) return -1;
-    
-    // Check if value is a positive integer
-    char* endptr;
-    long value = strtol(start, &endptr, 10);
-    
-    // Validate the value
-    if (endptr != end || value <= 0) {
-        printf("Error at line %d: checkbox_count must be a positive integer\n", yylineno);
-        hasError = 1;
-        return -1;
-    }
-    
-    return (int)value;
-}
-
-#line 613 "myhtml.tab.c"
+#line 316 "myhtml.tab.c"
 
 # ifndef YY_CAST
 #  ifdef __cplusplus
@@ -681,34 +384,21 @@ enum yysymbol_kind_t
   YYSYMBOL_YYACCEPT = 41,                  /* $accept  */
   YYSYMBOL_document = 42,                  /* document  */
   YYSYMBOL_head_tag = 43,                  /* head_tag  */
-  YYSYMBOL_body_tag = 44,                  /* body_tag  */
-  YYSYMBOL_head_content = 45,              /* head_content  */
-  YYSYMBOL_meta_tags = 46,                 /* meta_tags  */
-  YYSYMBOL_title_tag = 47,                 /* title_tag  */
-  YYSYMBOL_meta_tag = 48,                  /* meta_tag  */
-  YYSYMBOL_meta_attributes = 49,           /* meta_attributes  */
-  YYSYMBOL_body_content = 50,              /* body_content  */
-  YYSYMBOL_body_element = 51,              /* body_element  */
-  YYSYMBOL_comment = 52,                   /* comment  */
-  YYSYMBOL_comment_text = 53,              /* comment_text  */
-  YYSYMBOL_p_element = 54,                 /* p_element  */
-  YYSYMBOL_a_element = 55,                 /* a_element  */
-  YYSYMBOL_a_content = 56,                 /* a_content  */
-  YYSYMBOL_img_element = 57,               /* img_element  */
-  YYSYMBOL_img_attributes = 58,            /* img_attributes  */
-  YYSYMBOL_form_element = 59,              /* form_element  */
-  YYSYMBOL_60_1 = 60,                      /* $@1  */
-  YYSYMBOL_form_attributes = 61,           /* form_attributes  */
-  YYSYMBOL_form_content = 62,              /* form_content  */
-  YYSYMBOL_form_item = 63,                 /* form_item  */
-  YYSYMBOL_input_element = 64,             /* input_element  */
-  YYSYMBOL_input_attributes = 65,          /* input_attributes  */
-  YYSYMBOL_label_element = 66,             /* label_element  */
-  YYSYMBOL_label_attributes = 67,          /* label_attributes  */
-  YYSYMBOL_div_element = 68,               /* div_element  */
-  YYSYMBOL_div_attributes = 69,            /* div_attributes  */
-  YYSYMBOL_div_content = 70,               /* div_content  */
-  YYSYMBOL_text = 71                       /* text  */
+  YYSYMBOL_head_content = 44,              /* head_content  */
+  YYSYMBOL_meta_tag = 45,                  /* meta_tag  */
+  YYSYMBOL_title_tag = 46,                 /* title_tag  */
+  YYSYMBOL_body_tag = 47,                  /* body_tag  */
+  YYSYMBOL_body_content = 48,              /* body_content  */
+  YYSYMBOL_body_element = 49,              /* body_element  */
+  YYSYMBOL_p_element = 50,                 /* p_element  */
+  YYSYMBOL_a_element = 51,                 /* a_element  */
+  YYSYMBOL_img_element = 52,               /* img_element  */
+  YYSYMBOL_input_element = 53,             /* input_element  */
+  YYSYMBOL_form_element = 54,              /* form_element  */
+  YYSYMBOL_form_content = 55,              /* form_content  */
+  YYSYMBOL_text = 56,                      /* text  */
+  YYSYMBOL_comment = 57,                   /* comment  */
+  YYSYMBOL_comment_text = 58               /* comment_text  */
 };
 typedef enum yysymbol_kind_t yysymbol_kind_t;
 
@@ -1036,16 +726,16 @@ union yyalloc
 /* YYFINAL -- State number of the termination state.  */
 #define YYFINAL  5
 /* YYLAST -- Last index in YYTABLE.  */
-#define YYLAST   117
+#define YYLAST   67
 
 /* YYNTOKENS -- Number of terminals.  */
 #define YYNTOKENS  41
 /* YYNNTS -- Number of nonterminals.  */
-#define YYNNTS  31
+#define YYNNTS  18
 /* YYNRULES -- Number of rules.  */
-#define YYNRULES  75
+#define YYNRULES  31
 /* YYNSTATES -- Number of states.  */
-#define YYNSTATES  126
+#define YYNSTATES  73
 
 /* YYMAXUTOK -- Last valid token kind.  */
 #define YYMAXUTOK   295
@@ -1098,14 +788,10 @@ static const yytype_int8 yytranslate[] =
 /* YYRLINE[YYN] -- Source line where rule number YYN was defined.  */
 static const yytype_int16 yyrline[] =
 {
-       0,   583,   583,   590,   593,   596,   600,   602,   606,   608,
-     612,   620,   624,   625,   628,   629,   632,   633,   634,   635,
-     636,   637,   638,   641,   644,   645,   655,   660,   665,   671,
-     677,   678,   679,   680,   681,   684,   687,   691,   695,   699,
-     703,   707,   713,   713,   739,   742,   745,   749,   753,   756,
-     757,   760,   761,   762,   763,   766,   796,   802,   808,   815,
-     822,   827,   831,   835,   840,   843,   846,   850,   856,   859,
-     862,   866,   872,   873,   876,   880
+       0,   277,   277,   281,   284,   285,   288,   291,   298,   301,
+     302,   305,   306,   307,   308,   309,   310,   317,   318,   322,
+     326,   333,   341,   348,   357,   399,   400,   404,   408,   417,
+     420,   421
 };
 #endif
 
@@ -1130,13 +816,9 @@ static const char *const yytname[] =
   "SRC_ATTR", "ALT_ATTR", "TYPE_ATTR", "VALUE_ATTR", "FOR_ATTR",
   "WIDTH_ATTR", "HEIGHT_ATTR", "CHECKBOX_COUNT_ATTR", "CHARSET_ATTR",
   "NAME_CONTENT_ATTR", "TEXT", "$accept", "document", "head_tag",
-  "body_tag", "head_content", "meta_tags", "title_tag", "meta_tag",
-  "meta_attributes", "body_content", "body_element", "comment",
-  "comment_text", "p_element", "a_element", "a_content", "img_element",
-  "img_attributes", "form_element", "$@1", "form_attributes",
-  "form_content", "form_item", "input_element", "input_attributes",
-  "label_element", "label_attributes", "div_element", "div_attributes",
-  "div_content", "text", YY_NULLPTR
+  "head_content", "meta_tag", "title_tag", "body_tag", "body_content",
+  "body_element", "p_element", "a_element", "img_element", "input_element",
+  "form_element", "form_content", "text", "comment", "comment_text", YY_NULLPTR
 };
 
 static const char *
@@ -1146,7 +828,7 @@ yysymbol_name (yysymbol_kind_t yysymbol)
 }
 #endif
 
-#define YYPACT_NINF (-56)
+#define YYPACT_NINF (-23)
 
 #define yypact_value_is_default(Yyn) \
   ((Yyn) == YYPACT_NINF)
@@ -1160,19 +842,14 @@ yysymbol_name (yysymbol_kind_t yysymbol)
    STATE-NUM.  */
 static const yytype_int8 yypact[] =
 {
-      14,    50,    19,    39,    53,   -56,    36,    71,    67,   -56,
-      75,   -56,    -8,   -56,    28,    67,   -56,    -7,   -56,   -56,
-     -56,   -56,   -56,    56,   -56,   -56,    43,    45,    54,    38,
-      22,   -56,   -56,   -56,   -56,   -56,   -56,   -56,   -56,   -56,
-     -56,   -18,    55,    57,    59,    60,    58,    44,    20,    26,
-      64,    46,    62,    66,    17,    36,    68,    69,   -56,   -56,
-     -56,    70,    65,    61,    72,    73,    74,    78,   -56,   -56,
-     -56,   -56,   -56,   -56,   -10,    36,    36,    10,    -4,   -56,
-     -56,   -56,   -56,   -56,   -56,   -56,   -56,    -9,     0,   -56,
-     -56,    80,    36,    -2,    21,   -56,   -56,   -56,    76,   -56,
-     -56,   -19,    31,   -56,   -56,   -56,   -56,   -56,    77,    79,
-      83,    63,    81,   -56,    85,   -56,   -56,     5,    82,    84,
-     -56,   -56,    12,   -56,   -56,   -56
+       6,     9,    26,    18,    30,   -23,    -7,    32,    28,   -23,
+      37,   -23,    -9,   -23,     4,   -23,    -8,   -23,   -23,   -23,
+      19,   -23,   -21,    17,    20,    21,    22,    23,   -23,   -23,
+     -23,   -23,   -23,   -23,   -23,   -23,   -23,   -23,    27,    25,
+      16,    24,    29,    12,    31,    -4,    -7,    33,    34,    36,
+      35,    38,    40,   -23,   -23,   -11,    -7,    -7,    41,   -23,
+      13,   -23,   -23,   -10,   -12,   -23,     0,    39,   -23,   -23,
+     -23,   -23,   -23
 };
 
 /* YYDEFACT[STATE-NUM] -- Default reduction number in state STATE-NUM.
@@ -1180,37 +857,28 @@ static const yytype_int8 yypact[] =
    means the default is an error.  */
 static const yytype_int8 yydefact[] =
 {
-       0,     4,     0,     0,     0,     1,     0,     0,     7,    14,
-       0,    74,     0,     3,     0,     6,     8,     0,     2,    10,
-      75,    12,    13,     0,     9,     5,     0,     0,     0,     0,
-      48,    24,    22,    15,    21,    16,    17,    18,    19,    20,
-      11,     0,     0,    69,     0,     0,     0,     0,     0,     0,
-       0,    44,    45,     0,     0,     0,     0,     0,    70,    71,
-      72,     0,     0,     0,     0,     0,     0,     0,    35,    46,
-      47,    42,    23,    25,     0,     0,     0,     0,    30,    41,
-      40,    37,    36,    39,    38,    49,    28,     0,     0,    68,
-      73,     0,    32,    31,     0,    26,    27,    29,    34,    33,
-      43,     0,    63,    54,    53,    50,    51,    52,     0,     0,
-       0,    60,    61,    62,     0,    66,    67,     0,    56,    57,
-      55,    65,     0,    58,    59,    64
+       0,     0,     0,     0,     0,     1,     0,     0,     5,     9,
+       0,    27,     0,     3,     0,     4,     0,     2,     7,    28,
+       0,     8,     0,     0,     0,     0,     0,     0,    30,    18,
+      10,    11,    12,    13,    14,    15,    17,     6,     0,     0,
+       0,     0,     0,     0,     0,     0,     0,     0,     0,     0,
+       0,     0,     0,    29,    31,     0,     0,     0,     0,    25,
+       0,    23,    19,     0,     0,    22,     0,     0,    20,    21,
+      24,    26,    16
 };
 
 /* YYPGOTO[NTERM-NUM].  */
 static const yytype_int8 yypgoto[] =
 {
-     -56,   -56,   -56,   -56,   -56,   -56,   -56,    86,   -56,   -56,
-      25,     4,   -56,   -56,   -56,   -56,   -39,   -56,   -56,   -56,
-     -56,   -56,   -56,   -56,   -56,   -56,   -56,   -56,   -56,   -56,
-     -55
+     -23,   -23,   -23,   -23,   -23,   -23,   -23,   -23,    -6,   -23,
+     -23,   -23,   -23,   -23,   -23,   -22,   -23,   -23
 };
 
 /* YYDEFGOTO[NTERM-NUM].  */
 static const yytype_int8 yydefgoto[] =
 {
-       0,     2,     4,    10,     7,    15,     8,    16,    23,    17,
-      33,    34,    54,    35,    36,    91,    37,    50,    38,    85,
-      53,    94,   105,   106,   114,   107,   110,    39,    45,    77,
-      12
+       0,     2,     4,     7,    15,     8,    10,    16,    30,    31,
+      32,    33,    34,    35,    66,    12,    36,    45
 };
 
 /* YYTABLE[YYPACT[STATE-NUM]] -- What to do in state STATE-NUM.  If
@@ -1218,79 +886,56 @@ static const yytype_int8 yydefgoto[] =
    number is the opposite.  If YYTABLE_NINF, syntax error.  */
 static const yytype_int8 yytable[] =
 {
-      74,    25,    19,    86,    95,    26,    55,    27,   108,    28,
-      56,    29,    30,    96,    29,   109,    29,     1,    31,     5,
-      87,    88,    26,    93,    27,    89,    28,   121,    29,    30,
-      20,    20,    20,    32,   125,    31,    11,    98,    20,    92,
-      20,   100,   101,    72,   102,    11,    31,    64,     6,    51,
-      32,    65,    20,    66,    99,     3,    67,    73,   111,    52,
-       9,   103,   122,   112,   113,    47,    21,    22,    48,    49,
-      41,    42,    43,    44,    62,    63,    11,    13,    14,    18,
-      40,    46,    57,    69,    60,    58,    59,    61,    68,    70,
-      71,    80,    75,    76,    78,   118,    79,    97,   104,     0,
-      82,    24,    90,    81,    83,    84,   116,   117,   119,   120,
-       0,   115,     0,     0,     0,   123,    20,   124
+      21,    18,    62,    68,    22,    69,    38,    39,    23,     1,
+      24,    25,    22,    26,     3,    27,    23,    28,    24,    25,
+      70,    26,    53,    27,    55,    28,     5,     6,    19,    19,
+      19,    19,    29,    11,    63,    64,    54,     9,    13,    14,
+      29,    17,    20,    37,    40,    48,    51,    41,    42,    43,
+      44,    46,    47,    67,    49,     0,     0,    56,    57,    59,
+      71,    72,    60,    52,    61,    65,    50,    58
 };
 
 static const yytype_int8 yycheck[] =
 {
-      55,     8,    10,    13,    13,    12,    24,    14,    27,    16,
-      28,    18,    19,    13,    18,    34,    18,     3,    25,     0,
-      75,    76,    12,    78,    14,    15,    16,    22,    18,    19,
-      40,    40,    40,    40,    22,    25,    40,    92,    40,    78,
-      40,    20,    21,    26,    23,    40,    25,    27,     9,    27,
-      40,    31,    40,    27,    93,     5,    30,    40,    27,    37,
-       7,    40,   117,    32,    33,    27,    38,    39,    30,    31,
-      27,    28,    27,    28,    30,    31,    40,     6,    11,     4,
-      24,    27,    27,    37,    24,    28,    27,    29,    24,    27,
-      24,    30,    24,    24,    24,    32,    31,    17,    94,    -1,
-      27,    15,    77,    31,    30,    27,    27,    24,    27,    24,
-      -1,    34,    -1,    -1,    -1,    33,    40,    33
+       8,    10,    13,    13,    12,    17,    27,    28,    16,     3,
+      18,    19,    12,    21,     5,    23,    16,    25,    18,    19,
+      20,    21,    26,    23,    46,    25,     0,     9,    40,    40,
+      40,    40,    40,    40,    56,    57,    40,     7,     6,    11,
+      40,     4,    38,    24,    27,    29,    34,    27,    27,    27,
+      27,    24,    27,    40,    30,    -1,    -1,    24,    24,    24,
+      66,    22,    24,    32,    24,    24,    37,    31
 };
 
 /* YYSTOS[STATE-NUM] -- The symbol kind of the accessing symbol of
    state STATE-NUM.  */
 static const yytype_int8 yystos[] =
 {
-       0,     3,    42,     5,    43,     0,     9,    45,    47,     7,
-      44,    40,    71,     6,    11,    46,    48,    50,     4,    10,
-      40,    38,    39,    49,    48,     8,    12,    14,    16,    18,
-      19,    25,    40,    51,    52,    54,    55,    57,    59,    68,
-      24,    27,    28,    27,    28,    69,    27,    27,    30,    31,
-      58,    27,    37,    61,    53,    24,    28,    27,    28,    27,
-      24,    29,    30,    31,    27,    31,    27,    30,    24,    37,
-      27,    24,    26,    40,    71,    24,    24,    70,    24,    31,
-      30,    31,    27,    30,    27,    60,    13,    71,    71,    15,
-      51,    56,    57,    71,    62,    13,    13,    17,    71,    57,
-      20,    21,    23,    40,    52,    63,    64,    66,    27,    34,
-      67,    27,    32,    33,    65,    34,    27,    24,    32,    27,
-      24,    22,    71,    33,    33,    22
+       0,     3,    42,     5,    43,     0,     9,    44,    46,     7,
+      47,    40,    56,     6,    11,    45,    48,     4,    10,    40,
+      38,     8,    12,    16,    18,    19,    21,    23,    25,    40,
+      49,    50,    51,    52,    53,    54,    57,    24,    27,    28,
+      27,    27,    27,    27,    27,    58,    24,    27,    29,    30,
+      37,    34,    32,    26,    40,    56,    24,    24,    31,    24,
+      24,    24,    13,    56,    56,    24,    55,    40,    13,    17,
+      20,    49,    22
 };
 
 /* YYR1[RULE-NUM] -- Symbol kind of the left-hand side of rule RULE-NUM.  */
 static const yytype_int8 yyr1[] =
 {
-       0,    41,    42,    43,    43,    44,    45,    45,    46,    46,
-      47,    48,    49,    49,    50,    50,    51,    51,    51,    51,
-      51,    51,    51,    52,    53,    53,    54,    54,    54,    55,
-      56,    56,    56,    56,    56,    57,    58,    58,    58,    58,
-      58,    58,    60,    59,    61,    61,    61,    61,    61,    62,
-      62,    63,    63,    63,    63,    64,    65,    65,    65,    65,
-      65,    65,    65,    65,    66,    66,    67,    67,    68,    69,
-      69,    69,    70,    70,    71,    71
+       0,    41,    42,    43,    44,    44,    45,    46,    47,    48,
+      48,    49,    49,    49,    49,    49,    49,    49,    49,    50,
+      50,    51,    52,    53,    54,    55,    55,    56,    56,    57,
+      58,    58
 };
 
 /* YYR2[RULE-NUM] -- Number of symbols on the right-hand side of rule RULE-NUM.  */
 static const yytype_int8 yyr2[] =
 {
-       0,     2,     4,     3,     0,     3,     2,     1,     1,     2,
-       3,     3,     1,     1,     0,     2,     1,     1,     1,     1,
-       1,     1,     1,     3,     0,     2,     6,     6,     5,     6,
-       0,     1,     1,     2,     2,     3,     3,     3,     3,     3,
-       3,     3,     0,     6,     1,     1,     2,     2,     0,     0,
-       2,     1,     1,     1,     1,     3,     2,     2,     3,     3,
-       1,     1,     1,     0,     5,     4,     2,     2,     5,     1,
-       2,     2,     0,     2,     1,     2
+       0,     2,     4,     3,     2,     1,     3,     3,     3,     0,
+       2,     1,     1,     1,     1,     1,     6,     1,     1,     5,
+       6,     6,     5,     4,     6,     0,     2,     1,     2,     3,
+       0,     2
 };
 
 
@@ -1754,454 +1399,156 @@ yyreduce:
   switch (yyn)
     {
   case 2: /* document: MYHTML_START head_tag body_tag MYHTML_END  */
-#line 584 "myhtml.y"
-        { 
-            validate_label_input_associations();
-            if (debug) printf("Successfully parsed MYHTML document\n"); 
-        }
-#line 1763 "myhtml.tab.c"
+#line 278 "myhtml.y"
+        { /* (Εδώ μπορούν να προστεθούν επιπλέον έλεγχοι, π.χ. association label-input) */ }
+#line 1405 "myhtml.tab.c"
     break;
 
-  case 3: /* head_tag: HEAD_START head_content HEAD_END  */
-#line 591 "myhtml.y"
-        { if (debug) printf("Parsed head section\n"); }
-#line 1769 "myhtml.tab.c"
-    break;
-
-  case 4: /* head_tag: %empty  */
-#line 593 "myhtml.y"
-        { if (debug) printf("Empty head section\n"); }
-#line 1775 "myhtml.tab.c"
-    break;
-
-  case 5: /* body_tag: BODY_START body_content BODY_END  */
-#line 597 "myhtml.y"
-        { if (debug) printf("Parsed body section\n"); }
-#line 1781 "myhtml.tab.c"
-    break;
-
-  case 6: /* head_content: title_tag meta_tags  */
-#line 601 "myhtml.y"
-            { if (debug) printf("Parsed head content with meta tags\n"); }
-#line 1787 "myhtml.tab.c"
-    break;
-
-  case 7: /* head_content: title_tag  */
-#line 603 "myhtml.y"
-            { if (debug) printf("Parsed head content with title only\n"); }
-#line 1793 "myhtml.tab.c"
-    break;
-
-  case 8: /* meta_tags: meta_tag  */
-#line 607 "myhtml.y"
-        { if (debug) printf("Parsed single meta tag\n"); }
-#line 1799 "myhtml.tab.c"
-    break;
-
-  case 9: /* meta_tags: meta_tags meta_tag  */
-#line 609 "myhtml.y"
-        { if (debug) printf("Parsed additional meta tag\n"); }
-#line 1805 "myhtml.tab.c"
-    break;
-
-  case 10: /* title_tag: TITLE_START text TITLE_END  */
-#line 613 "myhtml.y"
+  case 7: /* title_tag: TITLE_START text TITLE_END  */
+#line 292 "myhtml.y"
         { 
             validate_title_length((yyvsp[-1].string_val));
-            if (debug) printf("Parsed title: %s\n", (yyvsp[-1].string_val)); 
-            free((yyvsp[-1].string_val)); 
-        }
-#line 1815 "myhtml.tab.c"
-    break;
-
-  case 11: /* meta_tag: META_START meta_attributes CLOSE_TAG  */
-#line 621 "myhtml.y"
-       { if (debug) printf("Parsed meta tag\n"); }
-#line 1821 "myhtml.tab.c"
-    break;
-
-  case 22: /* body_element: TEXT  */
-#line 638 "myhtml.y"
-                  { free((yyvsp[0].string_val)); }
-#line 1827 "myhtml.tab.c"
-    break;
-
-  case 24: /* comment_text: %empty  */
-#line 644 "myhtml.y"
-                          { (yyval.string_val) = strdup(""); }
-#line 1833 "myhtml.tab.c"
-    break;
-
-  case 25: /* comment_text: comment_text TEXT  */
-#line 645 "myhtml.y"
-                               { 
-               char* new_text = malloc(strlen((yyvsp[-1].string_val)) + strlen((yyvsp[0].string_val)) + 1);
-               strcpy(new_text, (yyvsp[-1].string_val));
-               strcat(new_text, (yyvsp[0].string_val));
-               free((yyvsp[-1].string_val));
-               free((yyvsp[0].string_val));
-               (yyval.string_val) = new_text;
-           }
-#line 1846 "myhtml.tab.c"
-    break;
-
-  case 26: /* p_element: P_START ID_ATTR STYLE_ATTR CLOSE_TAG text P_END  */
-#line 655 "myhtml.y"
-                                                           {
-            validate_id((yyvsp[-4].string_val));
-            validate_style_attribute((yyvsp[-3].string_val));
             free((yyvsp[-1].string_val));
-         }
-#line 1856 "myhtml.tab.c"
-    break;
-
-  case 27: /* p_element: P_START STYLE_ATTR ID_ATTR CLOSE_TAG text P_END  */
-#line 660 "myhtml.y"
-                                                           {
-            validate_id((yyvsp[-3].string_val));
-            validate_style_attribute((yyvsp[-4].string_val));
-            free((yyvsp[-1].string_val));
-         }
-#line 1866 "myhtml.tab.c"
-    break;
-
-  case 28: /* p_element: P_START ID_ATTR CLOSE_TAG text P_END  */
-#line 665 "myhtml.y"
-                                                {
-            validate_id((yyvsp[-3].string_val));
-            free((yyvsp[-1].string_val));
-         }
-#line 1875 "myhtml.tab.c"
-    break;
-
-  case 29: /* a_element: A_START ID_ATTR HREF_ATTR CLOSE_TAG a_content A_END  */
-#line 671 "myhtml.y"
-                                                               {
-            validate_id((yyvsp[-4].string_val));
-            validate_href((yyvsp[-3].string_val));
-         }
-#line 1884 "myhtml.tab.c"
-    break;
-
-  case 36: /* img_attributes: SRC_ATTR ALT_ATTR ID_ATTR  */
-#line 687 "myhtml.y"
-                                          {
-                validate_src((yyvsp[-2].string_val));
-                validate_id((yyvsp[0].string_val));
-              }
-#line 1893 "myhtml.tab.c"
-    break;
-
-  case 37: /* img_attributes: SRC_ATTR ID_ATTR ALT_ATTR  */
-#line 691 "myhtml.y"
-                                          {
-                validate_src((yyvsp[-2].string_val));
-                validate_id((yyvsp[-1].string_val));
-              }
-#line 1902 "myhtml.tab.c"
-    break;
-
-  case 38: /* img_attributes: ALT_ATTR SRC_ATTR ID_ATTR  */
-#line 695 "myhtml.y"
-                                          {
-                validate_src((yyvsp[-1].string_val));
-                validate_id((yyvsp[0].string_val));
-              }
-#line 1911 "myhtml.tab.c"
-    break;
-
-  case 39: /* img_attributes: ALT_ATTR ID_ATTR SRC_ATTR  */
-#line 699 "myhtml.y"
-                                          {
-                validate_src((yyvsp[0].string_val));
-                validate_id((yyvsp[-1].string_val));
-              }
-#line 1920 "myhtml.tab.c"
-    break;
-
-  case 40: /* img_attributes: ID_ATTR ALT_ATTR SRC_ATTR  */
-#line 703 "myhtml.y"
-                                          {
-                validate_src((yyvsp[0].string_val));
-                validate_id((yyvsp[-2].string_val));
-              }
-#line 1929 "myhtml.tab.c"
-    break;
-
-  case 41: /* img_attributes: ID_ATTR SRC_ATTR ALT_ATTR  */
-#line 707 "myhtml.y"
-                                          {
-                validate_src((yyvsp[-1].string_val));
-                validate_id((yyvsp[-2].string_val));
-              }
-#line 1938 "myhtml.tab.c"
-    break;
-
-  case 42: /* $@1: %empty  */
-#line 713 "myhtml.y"
-                                                   {
-                formStartLine = yylineno;
-                actualCheckboxCount = 0;  // Reset counter for new form
-                hasCheckboxInput = 0;     // Reset checkbox presence flag
-                hasSubmitInput = 0;       // Reset submit button state
-                submitInputLine = 0;      // Reset submit line number
-             }
-#line 1950 "myhtml.tab.c"
-    break;
-
-  case 43: /* form_element: FORM_START form_attributes CLOSE_TAG $@1 form_content FORM_END  */
-#line 720 "myhtml.y"
-                                   {
-                // Check if checkbox_count is specified but no checkboxes exist
-                if (expectedCheckboxCount != -1 && !hasCheckboxInput) {
-                    printf("Error at line %d: Form has checkbox_count attribute but contains no checkbox inputs\n",
-                           formStartLine);
-                    hasError = 1;
-                }
-                // Check if count matches (only if we have at least one checkbox)
-                else if (expectedCheckboxCount != -1 && hasCheckboxInput && 
-                         actualCheckboxCount != expectedCheckboxCount) {
-                    printf("Error at line %d: Form has %d checkbox inputs, but checkbox_count specified %d\n",
-                           formStartLine, actualCheckboxCount, expectedCheckboxCount);
-                    hasError = 1;
-                }
-                expectedCheckboxCount = -1;  // Reset for next form
-                hasCheckboxInput = 0;        // Reset for next form
-             }
-#line 1972 "myhtml.tab.c"
-    break;
-
-  case 44: /* form_attributes: ID_ATTR  */
-#line 739 "myhtml.y"
-                         {
-                    validate_id((yyvsp[0].string_val));
-                }
-#line 1980 "myhtml.tab.c"
-    break;
-
-  case 45: /* form_attributes: CHECKBOX_COUNT_ATTR  */
-#line 742 "myhtml.y"
-                                      {
-                    expectedCheckboxCount = extract_checkbox_count((yyvsp[0].string_val));
-                }
-#line 1988 "myhtml.tab.c"
-    break;
-
-  case 46: /* form_attributes: ID_ATTR CHECKBOX_COUNT_ATTR  */
-#line 745 "myhtml.y"
-                                              {
-                    validate_id((yyvsp[-1].string_val));
-                    expectedCheckboxCount = extract_checkbox_count((yyvsp[0].string_val));
-                }
-#line 1997 "myhtml.tab.c"
-    break;
-
-  case 47: /* form_attributes: CHECKBOX_COUNT_ATTR ID_ATTR  */
-#line 749 "myhtml.y"
-                                              {
-                    expectedCheckboxCount = extract_checkbox_count((yyvsp[-1].string_val));
-                    validate_id((yyvsp[0].string_val));
-                }
-#line 2006 "myhtml.tab.c"
-    break;
-
-  case 54: /* form_item: TEXT  */
-#line 763 "myhtml.y"
-               { free((yyvsp[0].string_val)); }
-#line 2012 "myhtml.tab.c"
-    break;
-
-  case 55: /* input_element: INPUT_START input_attributes CLOSE_TAG  */
-#line 766 "myhtml.y"
-                                                      {
-        // Validate input type here
-        int i;
-        int found_type = 0;
-        for (i = 0; i < (yyvsp[-1].attr_list).attr_count; i++) {
-            if (strstr((yyvsp[-1].attr_list).attributes[i], " type=\"") != NULL) {
-                found_type = 1;
-                if (!validate_input_type((yyvsp[-1].attr_list).attributes[i])) {
-                    printf("Error at line %d: Invalid input type\n", yylineno);
-                    hasError = 1;
-                }
-                // Check if this is a checkbox input
-                if (strstr((yyvsp[-1].attr_list).attributes[i], " type=\"checkbox\"") != NULL) {
-                    actualCheckboxCount++;
-                    hasCheckboxInput = 1;  // Set flag when we find a checkbox
-                }
-                break;
-            }
         }
-        if (!found_type) {
-            printf("Error at line %d: Input element must have a type attribute\n", yylineno);
-            hasError = 1;
-        }
-        // Free allocated memory
-        for (i = 0; i < (yyvsp[-1].attr_list).attr_count; i++) {
-            free((yyvsp[-1].attr_list).attributes[i]);
-        }
-    }
-#line 2045 "myhtml.tab.c"
+#line 1414 "myhtml.tab.c"
     break;
 
-  case 56: /* input_attributes: ID_ATTR TYPE_ATTR  */
-#line 796 "myhtml.y"
-                                    {
-                    (yyval.attr_list).attr_count = 2;
-                    (yyval.attr_list).attributes[0] = strdup((yyvsp[-1].string_val));
-                    (yyval.attr_list).attributes[1] = strdup((yyvsp[0].string_val));
-                    validate_id((yyvsp[-1].string_val));
-                }
-#line 2056 "myhtml.tab.c"
-    break;
-
-  case 57: /* input_attributes: TYPE_ATTR ID_ATTR  */
-#line 802 "myhtml.y"
-                                    {
-                    (yyval.attr_list).attr_count = 2;
-                    (yyval.attr_list).attributes[0] = strdup((yyvsp[-1].string_val));
-                    (yyval.attr_list).attributes[1] = strdup((yyvsp[0].string_val));
-                    validate_id((yyvsp[0].string_val));
-                }
-#line 2067 "myhtml.tab.c"
-    break;
-
-  case 58: /* input_attributes: ID_ATTR TYPE_ATTR VALUE_ATTR  */
-#line 808 "myhtml.y"
-                                               {
-                    (yyval.attr_list).attr_count = 3;
-                    (yyval.attr_list).attributes[0] = strdup((yyvsp[-2].string_val));
-                    (yyval.attr_list).attributes[1] = strdup((yyvsp[-1].string_val));
-                    (yyval.attr_list).attributes[2] = strdup((yyvsp[0].string_val));
-                    validate_id((yyvsp[-2].string_val));
-                }
-#line 2079 "myhtml.tab.c"
-    break;
-
-  case 59: /* input_attributes: TYPE_ATTR ID_ATTR VALUE_ATTR  */
-#line 815 "myhtml.y"
-                                               {
-                    (yyval.attr_list).attr_count = 3;
-                    (yyval.attr_list).attributes[0] = strdup((yyvsp[-2].string_val));
-                    (yyval.attr_list).attributes[1] = strdup((yyvsp[-1].string_val));
-                    (yyval.attr_list).attributes[2] = strdup((yyvsp[0].string_val));
-                    validate_id((yyvsp[-1].string_val));
-                }
-#line 2091 "myhtml.tab.c"
-    break;
-
-  case 60: /* input_attributes: ID_ATTR  */
-#line 822 "myhtml.y"
-                          {
-                    (yyval.attr_list).attr_count = 1;
-                    (yyval.attr_list).attributes[0] = strdup((yyvsp[0].string_val));
-                    validate_id((yyvsp[0].string_val));
-                }
-#line 2101 "myhtml.tab.c"
-    break;
-
-  case 61: /* input_attributes: TYPE_ATTR  */
-#line 827 "myhtml.y"
-                            {
-                    (yyval.attr_list).attr_count = 1;
-                    (yyval.attr_list).attributes[0] = strdup((yyvsp[0].string_val));
-                }
-#line 2110 "myhtml.tab.c"
-    break;
-
-  case 62: /* input_attributes: VALUE_ATTR  */
-#line 831 "myhtml.y"
-                             {
-                    (yyval.attr_list).attr_count = 1;
-                    (yyval.attr_list).attributes[0] = strdup((yyvsp[0].string_val));
-                }
-#line 2119 "myhtml.tab.c"
-    break;
-
-  case 63: /* input_attributes: %empty  */
-#line 835 "myhtml.y"
-                              {
-                    (yyval.attr_list).attr_count = 0;
-                }
-#line 2127 "myhtml.tab.c"
-    break;
-
-  case 64: /* label_element: LABEL_START label_attributes CLOSE_TAG text LABEL_END  */
-#line 840 "myhtml.y"
-                                                                     {
+  case 16: /* body_element: LABEL_START ID_ATTR FOR_ATTR CLOSE_TAG TEXT LABEL_END  */
+#line 310 "myhtml.y"
+                                                                    {
+                validate_id((yyvsp[-4].string_val));
+                add_label_for((yyvsp[-3].string_val));
+                free((yyvsp[-4].string_val));
+                free((yyvsp[-3].string_val));
                 free((yyvsp[-1].string_val));
+              }
+#line 1426 "myhtml.tab.c"
+    break;
+
+  case 18: /* body_element: TEXT  */
+#line 318 "myhtml.y"
+                   { free((yyvsp[0].string_val)); }
+#line 1432 "myhtml.tab.c"
+    break;
+
+  case 19: /* p_element: P_START ID_ATTR CLOSE_TAG text P_END  */
+#line 322 "myhtml.y"
+                                                {
+              validate_id((yyvsp[-3].string_val));
+              free((yyvsp[-1].string_val));
+          }
+#line 1441 "myhtml.tab.c"
+    break;
+
+  case 20: /* p_element: P_START STYLE_ATTR ID_ATTR CLOSE_TAG text P_END  */
+#line 326 "myhtml.y"
+                                                            {
+              validate_id((yyvsp[-3].string_val));
+              free((yyvsp[-1].string_val));
+          }
+#line 1450 "myhtml.tab.c"
+    break;
+
+  case 21: /* a_element: A_START ID_ATTR HREF_ATTR CLOSE_TAG text A_END  */
+#line 333 "myhtml.y"
+                                                          {
+              validate_id((yyvsp[-4].string_val));
+              validate_href((yyvsp[-3].string_val));
+              free((yyvsp[-1].string_val));
+          }
+#line 1460 "myhtml.tab.c"
+    break;
+
+  case 22: /* img_element: IMG_START ID_ATTR SRC_ATTR ALT_ATTR CLOSE_TAG  */
+#line 341 "myhtml.y"
+                                                           {
+              validate_id((yyvsp[-3].string_val));
+              validate_src((yyvsp[-2].string_val));
+          }
+#line 1469 "myhtml.tab.c"
+    break;
+
+  case 23: /* input_element: INPUT_START ID_ATTR TYPE_ATTR CLOSE_TAG  */
+#line 348 "myhtml.y"
+                                                       {
+                 validate_id((yyvsp[-2].string_val));
+                 add_input_id((yyvsp[-2].string_val));
+                 int isSubmit = validate_input_type((yyvsp[-1].string_val));
+                 lastInputWasSubmit = isSubmit;
              }
-#line 2135 "myhtml.tab.c"
+#line 1480 "myhtml.tab.c"
     break;
 
-  case 66: /* label_attributes: ID_ATTR FOR_ATTR  */
-#line 846 "myhtml.y"
-                                   {
-                    validate_id((yyvsp[-1].string_val));
-                    store_label_for((yyvsp[-1].string_val), (yyvsp[0].string_val), yylineno);
-                }
-#line 2144 "myhtml.tab.c"
+  case 24: /* form_element: FORM_START ID_ATTR CHECKBOX_COUNT_ATTR CLOSE_TAG form_content FORM_END  */
+#line 357 "myhtml.y"
+                                                                                     {
+                  validate_id((yyvsp[-4].string_val));
+                  validate_checkbox_count((yyvsp[-3].string_val));
+                  
+                  /* Έλεγχος για το submit button */
+                  if (submitFound && !lastInputWasSubmit) {
+                      fprintf(stderr, "Error at line %d: Submit input must be the last input element in the form.\n", yylineno);
+                      exit(1);
+                  }
+
+                  /* Έλεγχος για το checkbox_count */
+                  if (!hasCheckbox) {
+                      fprintf(stderr, "Error at line %d: Form has checkbox_count but no checkbox inputs.\n", yylineno);
+                      exit(1);
+                  }
+                  if (actualCheckboxCount != expectedCheckboxCount) {
+                      fprintf(stderr, "Error at line %d: Expected %d checkbox inputs but found %d.\n", 
+                              yylineno, expectedCheckboxCount, actualCheckboxCount);
+                      exit(1);
+                  }
+
+                  /* Έλεγχος label-input associations */
+                  validate_all_labels();
+
+                  /* Επαναφορά μεταβλητών για ενδεχόμενη επόμενη φόρμα */
+                  submitFound = 0;
+                  lastInputWasSubmit = 0;
+                  actualCheckboxCount = 0;
+                  expectedCheckboxCount = 0;
+                  hasCheckbox = 0;
+                  inputIdsCount = 0;
+                  labelForsCount = 0;
+
+                  free((yyvsp[-4].string_val));
+                  free((yyvsp[-3].string_val));
+             }
+#line 1521 "myhtml.tab.c"
     break;
 
-  case 67: /* label_attributes: FOR_ATTR ID_ATTR  */
-#line 850 "myhtml.y"
-                                   {
-                    validate_id((yyvsp[0].string_val));
-                    store_label_for((yyvsp[0].string_val), (yyvsp[-1].string_val), yylineno);
-                }
-#line 2153 "myhtml.tab.c"
+  case 27: /* text: TEXT  */
+#line 404 "myhtml.y"
+           { 
+         (yyval.string_val) = strdup((yyvsp[0].string_val));
+         free((yyvsp[0].string_val));
+      }
+#line 1530 "myhtml.tab.c"
     break;
 
-  case 69: /* div_attributes: ID_ATTR  */
-#line 859 "myhtml.y"
-                        {
-                validate_id((yyvsp[0].string_val));
-              }
-#line 2161 "myhtml.tab.c"
+  case 28: /* text: text TEXT  */
+#line 408 "myhtml.y"
+                 {
+         char* new_text = malloc(strlen((yyvsp[-1].string_val)) + strlen((yyvsp[0].string_val)) + 1);
+         strcpy(new_text, (yyvsp[-1].string_val));
+         strcat(new_text, (yyvsp[0].string_val));
+         free((yyvsp[-1].string_val)); free((yyvsp[0].string_val));
+         (yyval.string_val) = new_text;
+       }
+#line 1542 "myhtml.tab.c"
     break;
 
-  case 70: /* div_attributes: ID_ATTR STYLE_ATTR  */
-#line 862 "myhtml.y"
-                                   {
-                validate_id((yyvsp[-1].string_val));
-                validate_style_attribute((yyvsp[0].string_val));
-              }
-#line 2170 "myhtml.tab.c"
-    break;
-
-  case 71: /* div_attributes: STYLE_ATTR ID_ATTR  */
-#line 866 "myhtml.y"
-                                   {
-                validate_id((yyvsp[0].string_val));
-                validate_style_attribute((yyvsp[-1].string_val));
-              }
-#line 2179 "myhtml.tab.c"
-    break;
-
-  case 74: /* text: TEXT  */
-#line 876 "myhtml.y"
-           {
-        (yyval.string_val) = strdup((yyvsp[0].string_val));
-        free((yyvsp[0].string_val));
-    }
-#line 2188 "myhtml.tab.c"
-    break;
-
-  case 75: /* text: text TEXT  */
-#line 880 "myhtml.y"
-                {
-        char* new_text = malloc(strlen((yyvsp[-1].string_val)) + strlen((yyvsp[0].string_val)) + 1);
-        strcpy(new_text, (yyvsp[-1].string_val));
-        strcat(new_text, (yyvsp[0].string_val));
-        free((yyvsp[-1].string_val));
-        free((yyvsp[0].string_val));
-        (yyval.string_val) = new_text;
-    }
-#line 2201 "myhtml.tab.c"
+  case 31: /* comment_text: comment_text TEXT  */
+#line 421 "myhtml.y"
+                               { free((yyvsp[0].string_val)); }
+#line 1548 "myhtml.tab.c"
     break;
 
 
-#line 2205 "myhtml.tab.c"
+#line 1552 "myhtml.tab.c"
 
       default: break;
     }
@@ -2394,12 +1741,11 @@ yyreturnlab:
   return yyresult;
 }
 
-#line 890 "myhtml.y"
+#line 424 "myhtml.y"
 
 
 void yyerror(const char *s) {
-    hasError = 1;
-    fprintf(stderr, "Syntax error at line %d: %s\nNear text: '%s'\n", yylineno, s, yytext);
+    fprintf(stderr, "Syntax error at line %d: %s near '%s'\n", yylineno, s, yytext);
 }
 
 int main(int argc, char **argv) {
@@ -2407,34 +1753,30 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Usage: %s <file_name>\n", argv[0]);
         return 1;
     }
-    
+    display_file(argv[1]);
+    extern FILE *yyin;
     FILE *input = fopen(argv[1], "r");
     if (!input) {
         fprintf(stderr, "Cannot open file: %s\n", argv[1]);
         return 1;
     }
-    
-    // Display the input file contents first
-    display_file(argv[1]);
-    
-    extern FILE *yyin;
     yyin = input;
-    
     int result = yyparse();
-    
     if (result == 0 && !hasError) {
         printf("Analysis result: File %s is syntactically correct.\n", argv[1]);
     }
     
-    /* Clean up allocated memory */
-    for(int i = 0; i < usedIdsCount; i++) {
+    /* Καθαρισμός μνήμης */
+    for (int i = 0; i < usedIdsCount; i++) {
         free(usedIds[i]);
     }
-    for(int i = 0; i < labelInputMapCount; i++) {
-        free(labelInputMap[i].label_id);
-        free(labelInputMap[i].input_id);
+    for (int i = 0; i < inputIdsCount; i++) {
+        free(inputIds[i]);
+    }
+    for (int i = 0; i < labelForsCount; i++) {
+        free(labelFors[i]);
     }
     
     fclose(input);
     return (result || hasError);
-} 
+}

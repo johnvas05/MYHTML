@@ -15,7 +15,7 @@ extern int debug;
 %option noyywrap
 %option yylineno
 
-%x COMMENT_MODE
+%x COMMENT
 
 WS      [ \t\r\n]+
 DIGIT   [0-9]
@@ -28,10 +28,9 @@ SPECIAL_CHAR [!@#$%^&*()\-_+=\[\]{}:;,.<>/?|\\']
 
 {WS}                  ; /* Skip whitespace */
 
-"<!--"               { BEGIN(COMMENT_MODE); return COMMENT_START; }
-<COMMENT_MODE>"-->"  { BEGIN(INITIAL); return COMMENT_END; }
-<COMMENT_MODE>\n     { yylval.string_val = strdup(" "); return TEXT; }
-<COMMENT_MODE>.      { yylval.string_val = strdup(yytext); return TEXT; }
+"<!--"               { BEGIN(COMMENT); return COMMENT_START; }
+<COMMENT>"-->"      { BEGIN(INITIAL); return COMMENT_END; }
+<COMMENT>[^-]+|"-"  { yylval.string_val = strdup(yytext); return TEXT; }
 
 "<MYHTML>"            { return MYHTML_START; }
 "</MYHTML>"           { return MYHTML_END; }
@@ -65,7 +64,7 @@ SPECIAL_CHAR [!@#$%^&*()\-_+=\[\]{}:;,.<>/?|\\']
 " type=\""[^\"]+"\""   { yylval.string_val = strdup(yytext); return TYPE_ATTR; }
 " value=\""[^\"]+"\""  { yylval.string_val = strdup(yytext); return VALUE_ATTR; }
 " for=\""[^\"]+"\""    { yylval.string_val = strdup(yytext); return FOR_ATTR; }
-"charset=\"UTF-8\""    { return CHARSET_ATTR; }
+" charset=\"UTF-8\""    { return CHARSET_ATTR; }
 " width=\""{DIGIT}+"\""  { yylval.string_val = strdup(yytext); return WIDTH_ATTR; }
 " height=\""{DIGIT}+"\""  { yylval.string_val = strdup(yytext); return HEIGHT_ATTR; }
 "name=\""[^\"]+"\""[ ]+"content=\""[^\"]+"\""  { return NAME_CONTENT_ATTR; }
@@ -82,7 +81,5 @@ SPECIAL_CHAR [!@#$%^&*()\-_+=\[\]{}:;,.<>/?|\\']
                         yyerror("Unmatched quote");
                         return TEXT;
                       }
-
-.                    { return yytext[0]; }
 
 %% 
