@@ -1,0 +1,72 @@
+<MYHTML>
+<head>
+    <!-- a. Title length validation (max 60 chars) -->
+    <title>Valid Title</title>
+    <title>This is a very long title that definitely exceeds the maximum length of sixty characters which is not allowed</title>
+    <meta charset="UTF-8">
+</head>
+<body>
+    <!-- b. ID uniqueness validation -->
+    <div id="unique1">First element with unique ID</div>
+    <p id="unique1">Error: Duplicate ID</p>
+
+    <!-- c. href attribute validation -->
+    <a id="link1" href="https://www.example.com">Absolute URL</a>
+    <a id="link2" href="./relative/path.html">Relative URL</a>
+    <a id="link3" href="#unique1">Valid element ID reference</a>
+    <a id="link4" href="#nonexistent">Invalid element ID reference</a>
+    <a id="link5" href="invalid url with spaces">Invalid URL format</a>
+
+    <!-- d. src attribute validation -->
+    <img id="img1" src="https://example.com/image.jpg" alt="Absolute URL">
+    <img id="img2" src="./images/local.jpg" alt="Relative URL">
+    <img id="img3" src="invalid@url@format" alt="Invalid URL format">
+
+    <!-- e. input type validation and submit position -->
+    <form id="form1">
+        <input id="input1" type="text">
+        <input id="input2" type="checkbox">
+        <input id="input3" type="radio">
+        <input id="input4" type="invalid_type">
+        <input id="submit1" type="submit">
+        <input id="submit2" type="submit"> <!-- Error: Multiple submit inputs -->
+    </form>
+
+    <!-- f. label-input association validation -->
+    <form id="form2">
+        <label id="label1" for="input5">Valid Label</label>
+        <input id="input5" type="text">
+        
+        <label id="label2" for="input6">Label for non-existent input</label>
+        
+        <label id="label3" for="input7">First Label</label>
+        <label id="label4" for="input7">Error: Multiple labels for same input</label>
+        <input id="input7" type="text">
+    </form>
+
+    <!-- g. style attribute validation -->
+    <div id="style1" style="background_color:white; color:black; font_size:90px">
+        Valid styles
+    </div>
+
+    <div id="style2" style="background_color:white; color:red; color:blue">
+        Error: Duplicate color property
+    </div>
+
+    <div id="style3" style="font_family:Arial; font_size:160%">
+        Valid font properties
+    </div>
+
+    <div id="style4" style="font_size:90">
+        Error: Missing unit for font_size
+    </div>
+
+    <div id="style5" style="background_color:white color:black">
+        Error: Missing semicolon between properties
+    </div>
+
+    <div id="style6" style="invalid_property:value">
+        Error: Invalid property name
+    </div>
+</body>
+</MYHTML> 

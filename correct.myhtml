@@ -1,0 +1,26 @@
+<MYHTML>
+<head>
+    <title>Test Correct File</title>
+    <meta charset="UTF-8">
+</head>
+<body>
+    <!-- Test unique IDs -->
+    <p id="p1">First paragraph</p>
+    <p id="p2">Second paragraph</p>
+
+    <!-- Test links -->
+    <a id="link1" href="https://www.example.com">Valid absolute URL</a>
+    <a id="link2" href="./local.html">Valid relative URL</a>
+
+    <!-- Test images -->
+    <img id="img1" src="/images/test.jpg" alt="Test Image">
+
+    <!-- Test form with checkbox count -->
+    <form id="form1" checkbox_count="2">
+        <label id="label1" for="check1">First Checkbox</label>
+        <input id="check1" type="checkbox">
+        <label id="label2" for="check2">Second Checkbox</label>
+        <input id="check2" type="checkbox">
+    </form>
+</body>
+</MYHTML> 

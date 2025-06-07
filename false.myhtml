@@ -1,0 +1,37 @@
+<MYHTML>
+<head>
+    <title>This is a very long title that exceeds the maximum length of 60 characters to test the title length validation</title>
+    <meta charset="UTF-16">  <!-- Wrong charset -->
+</head>
+<body>
+    <!-- Test duplicate IDs -->
+    <p id="p1">First paragraph</p>
+    <p id="p1">Second paragraph with duplicate ID</p>
+
+    <!-- Test invalid URLs -->
+    <a id="link1" href="invalid url with spaces">Invalid URL</a>
+    <img id="img1" src="invalid@url">
+
+    <!-- Test form with wrong checkbox count -->
+    <form id="form1" checkbox_count="3">
+        <label id="label1" for="nonexistent">Label with nonexistent for</label>
+        <input id="check1" type="checkbox">
+        <input id="check2" type="checkbox">
+        <!-- Only 2 checkboxes when count is 3 -->
+    </form>
+
+    <!-- Test invalid style attributes -->
+    <p id="p2" style="invalid_property:value; color:red; color:blue">Duplicate and invalid style properties</p>
+
+    <!-- Test unclosed tags -->
+    <div id="div1">
+        <p id="p3">Unclosed paragraph
+    </div>
+
+    <!-- Test multiple submit inputs -->
+    <form id="form2">
+        <input type="submit">
+        <input type="submit">  <!-- Second submit not allowed -->
+    </form>
+</body>
+</MYHTML> 
