@@ -12,7 +12,7 @@
     <a id="link1" href="invalid url with spaces">Invalid URL</a>
     <img id="img1" src="invalid@url">
 
-    <!-- Test form with wrong checkbox count -->
+    <!-- Test form with wrong ount -->
     <form id="form1" checkbox_count="3">
         <label id="label1" for="nonexistent">Label with nonexistent for</label>
         <input id="check1" type="checkbox">
